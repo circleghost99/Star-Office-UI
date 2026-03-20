@@ -19,6 +19,27 @@ from agent_discovery import _load_openclaw_config
 OPENCLAW_DIR = os.environ.get("OPENCLAW_DIR") or os.path.join(os.path.expanduser("~"), ".openclaw")
 SKILLS_DIR = os.path.join(OPENCLAW_DIR, "skills")
 
+# npm 全域安裝的 OpenClaw 內建 skills 路徑
+_NPM_GLOBAL_PATHS = [
+    os.path.join(os.path.expanduser("~"), ".npm-global", "lib", "node_modules", "openclaw", "skills"),
+    "/usr/local/lib/node_modules/openclaw/skills",
+    "/usr/lib/node_modules/openclaw/skills",
+]
+NPM_SKILLS_DIR = next((p for p in _NPM_GLOBAL_PATHS if os.path.isdir(p)), None)
+
+def _all_skills_dirs():
+    """回傳所有要掃描的 skills 目錄（本地優先）"""
+    dirs = []
+    if os.path.isdir(SKILLS_DIR):
+        dirs.append(("local", SKILLS_DIR))
+    # hooks 目錄也可能包含 skill（例如 self-improvement）
+    hooks_dir = os.path.join(OPENCLAW_DIR, "hooks")
+    if os.path.isdir(hooks_dir):
+        dirs.append(("hooks", hooks_dir))
+    if NPM_SKILLS_DIR:
+        dirs.append(("builtin", NPM_SKILLS_DIR))
+    return dirs
+
 
 def _parse_skill_md(skill_dir):
     """從 SKILL.md 提取 name 和 description
@@ -89,48 +110,56 @@ def _build_skill_agent_map():
 
 
 def scan_all_skills():
-    """掃描所有 skills，回傳完整資訊列表"""
-    if not os.path.isdir(SKILLS_DIR):
-        return []
-
+    """掌描所有 skills，回傳完整資訊列表（本地 + npm 全域）"""
     skill_agent_map = _build_skill_agent_map()
-    skills = []
+    skills = {}
 
-    for dirname in sorted(os.listdir(SKILLS_DIR)):
-        skill_dir = os.path.join(SKILLS_DIR, dirname)
-        if not os.path.isdir(skill_dir) or dirname.startswith("."):
+    for source, base_dir in _all_skills_dirs():
+        if not os.path.isdir(base_dir):
             continue
+        for dirname in sorted(os.listdir(base_dir)):
+            if dirname in skills:  # 本地優先，不覆蓋
+                continue
+            skill_dir = os.path.join(base_dir, dirname)
+            if not os.path.isdir(skill_dir) or dirname.startswith("."):
+                continue
 
-        name, description = _parse_skill_md(skill_dir)
+            name, description = _parse_skill_md(skill_dir)
 
-        # 檢查是否有 scripts/ 或其他子目錄
-        has_scripts = os.path.isdir(os.path.join(skill_dir, "scripts"))
-        has_examples = os.path.isdir(os.path.join(skill_dir, "examples"))
+            has_scripts = os.path.isdir(os.path.join(skill_dir, "scripts"))
+            has_examples = os.path.isdir(os.path.join(skill_dir, "examples"))
 
-        skill_info = {
-            "name": dirname,
-            "displayName": name or dirname,
-            "description": description or "",
-            "usedBy": skill_agent_map.get(dirname, []),
-            "hasScripts": has_scripts,
-            "hasExamples": has_examples,
-            "path": skill_dir,
-        }
-        skills.append(skill_info)
+            skill_info = {
+                "name": dirname,
+                "displayName": name or dirname,
+                "description": description or "",
+                "usedBy": skill_agent_map.get(dirname, []),
+                "hasScripts": has_scripts,
+                "hasExamples": has_examples,
+                "path": skill_dir,
+                "source": source,
+            }
+            skills[dirname] = skill_info
 
-    return skills
+    return sorted(skills.values(), key=lambda x: x["name"])
 
 
 def get_skill_detail(skill_name):
     """取得單一 skill 的詳細資訊（含完整 SKILL.md 內容）"""
-    skill_dir = os.path.join(SKILLS_DIR, skill_name)
-    if not os.path.isdir(skill_dir):
+    # 在所有目錄中搜尋
+    skill_dir = None
+    for source, base_dir in _all_skills_dirs():
+        candidate = os.path.join(base_dir, skill_name)
+        if os.path.isdir(candidate):
+            skill_dir = candidate
+            break
+
+    if skill_dir is None:
         return None
 
     name, description = _parse_skill_md(skill_dir)
     skill_agent_map = _build_skill_agent_map()
 
-    # 讀取完整 SKILL.md
     skill_md_path = os.path.join(skill_dir, "SKILL.md")
     full_content = ""
     if os.path.isfile(skill_md_path):

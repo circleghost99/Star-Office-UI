@@ -15,6 +15,9 @@ import threading
 from pathlib import Path
 from security_utils import is_production_mode, is_strong_secret, is_strong_drawer_pass
 from memo_utils import get_yesterday_date_str, sanitize_content, extract_memo_from_file
+from agent_discovery import discover_all_agents, get_agent_status
+from skills_scanner import scan_all_skills, get_skill_detail
+from memory_browser import list_memory_files, read_memory_file, get_latest_memo
 from store_utils import (
     load_agents_state as _store_load_agents_state,
     save_agents_state as _store_save_agents_state,
@@ -2065,6 +2068,76 @@ def assets_upload():
         return jsonify({"ok": False, "msg": str(e)}), 500
 
 
+# ========================================
+# Phase 1 API: Agent Discovery / Skills / Memory
+# ========================================
+
+@app.route("/api/agents/discover", methods=["GET"])
+def api_discover_agents():
+    """回傳所有 OpenClaw agent 的完整資訊"""
+    try:
+        agents = discover_all_agents()
+        return jsonify({"ok": True, "agents": agents})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@app.route("/api/agents/<agent_name>/status", methods=["GET"])
+def api_agent_status(agent_name):
+    """取得單一 agent 的即時狀態"""
+    try:
+        status = get_agent_status(agent_name)
+        if status is None:
+            return jsonify({"ok": False, "msg": "Agent not found"}), 404
+        return jsonify({"ok": True, **status})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@app.route("/api/skills", methods=["GET"])
+def api_list_skills():
+    """列出所有已安裝的 skills"""
+    try:
+        skills = scan_all_skills()
+        return jsonify({"ok": True, "skills": skills})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@app.route("/api/skills/<skill_name>", methods=["GET"])
+def api_skill_detail(skill_name):
+    """取得單一 skill 的詳細資訊"""
+    try:
+        detail = get_skill_detail(skill_name)
+        if detail is None:
+            return jsonify({"ok": False, "msg": "Skill not found"}), 404
+        return jsonify({"ok": True, **detail})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@app.route("/api/agents/<agent_name>/memory", methods=["GET"])
+def api_agent_memory_list(agent_name):
+    """列出 agent 的 memory 檔案"""
+    try:
+        files = list_memory_files(agent_name)
+        return jsonify({"ok": True, "files": files})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@app.route("/api/agents/<agent_name>/memory/<filename>", methods=["GET"])
+def api_agent_memory_read(agent_name, filename):
+    """讀取 agent 的 memory 檔案內容"""
+    try:
+        result = read_memory_file(agent_name, filename)
+        if result is None:
+            return jsonify({"ok": False, "msg": "File not found"}), 404
+        return jsonify({"ok": True, **result})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
 if __name__ == "__main__":
     raw_port = os.environ.get("STAR_BACKEND_PORT", "19000")
     try:
@@ -2100,4 +2173,5 @@ if __name__ == "__main__":
     print("=" * 50)
 
     app.run(host="0.0.0.0", port=backend_port, debug=False)
+
 

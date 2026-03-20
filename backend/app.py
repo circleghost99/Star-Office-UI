@@ -965,6 +965,7 @@ def join_agent():
         state = data.get("state", "idle")
         detail = data.get("detail", "")
         join_key = data.get("joinKey", "").strip()
+        openclaw_id = data.get("openclawId", "")
 
         # Normalize state early for compatibility
         state = normalize_agent_state(state)
@@ -1056,6 +1057,8 @@ def join_agent():
                 existing["authApprovedAt"] = datetime.now().isoformat()
                 existing["authExpiresAt"] = (datetime.now() + timedelta(hours=24)).isoformat()
                 existing["lastPushAt"] = datetime.now().isoformat()  # join 视为上线，纳入并发/离线判定
+                if openclaw_id:
+                    existing["openclawId"] = openclaw_id
                 if not existing.get("avatar"):
                     import random
                     existing["avatar"] = random.choice(["guest_role_1", "guest_role_2", "guest_role_3", "guest_role_4", "guest_role_5", "guest_role_6"])
@@ -1079,7 +1082,8 @@ def join_agent():
                     "authApprovedAt": datetime.now().isoformat(),
                     "authExpiresAt": (datetime.now() + timedelta(hours=24)).isoformat(),
                     "lastPushAt": datetime.now().isoformat(),
-                    "avatar": random.choice(["guest_role_1", "guest_role_2", "guest_role_3", "guest_role_4", "guest_role_5", "guest_role_6"])
+                    "avatar": random.choice(["guest_role_1", "guest_role_2", "guest_role_3", "guest_role_4", "guest_role_5", "guest_role_6"]),
+                    "openclawId": openclaw_id
                 })
 
             key_item["used"] = True
@@ -2134,6 +2138,54 @@ def api_agent_memory_read(agent_name, filename):
         if result is None:
             return jsonify({"ok": False, "msg": "File not found"}), 404
         return jsonify({"ok": True, **result})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+# ========================================
+# Phase 2 API: Rooms
+# ========================================
+
+@app.route("/api/rooms", methods=["GET"])
+def api_list_rooms():
+    """列出所有可用的房間"""
+    try:
+        agents = discover_all_agents()
+        rooms = []
+        for a in agents:
+            rooms.append({
+                "roomId": a["id"],
+                "roomName": f"{a['displayName']}的辦公室",
+                "agentId": a["id"],
+                "displayName": a["displayName"],
+                "state": a["state"],
+                "isMain": a.get("isMain", False),
+            })
+        return jsonify({"ok": True, "rooms": rooms})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@app.route("/api/rooms/<agent_name>", methods=["GET"])
+def api_room_detail(agent_name):
+    """取得特定 agent 的房間完整狀態"""
+    try:
+        agents = discover_all_agents()
+        agent = next((a for a in agents if a["id"] == agent_name), None)
+        if agent is None:
+            return jsonify({"ok": False, "msg": "Room not found"}), 404
+
+        # 取得 memo
+        memo = get_latest_memo(agent_name)
+
+        room = {
+            "roomId": agent_name,
+            "roomName": f"{agent['displayName']}的辦公室",
+            "agent": agent,
+            "memo": memo,
+            "skills": agent.get("skills", []),
+        }
+        return jsonify({"ok": True, **room})
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
 

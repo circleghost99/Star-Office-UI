@@ -162,7 +162,8 @@ def join_agent(agent_name, state="idle", detail=""):
         "name": display_name,
         "joinKey": JOIN_KEY,
         "state": state,
-        "detail": detail
+        "detail": detail,
+        "openclawId": agent_name
     }).encode("utf-8")
     
     req = urllib.request.Request(

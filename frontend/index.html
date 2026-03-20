@@ -1288,11 +1288,94 @@
         <button id="lang-btn-cn" onclick="setUILanguage('zh')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">CN</button>
         <button id="lang-btn-tw" onclick="setUILanguage('zh-tw')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">TW</button>
     </div>
+    <!-- Phase 2: 房間選擇器 -->
+    <div id="room-selector" style="position:fixed; top:calc(env(safe-area-inset-top, 0px) + 92px); left:12px; z-index:1000002;">
+        <select id="room-select" onchange="switchRoom(this.value)" style="padding:6px 10px; font-family:ArkPixel,monospace; font-size:12px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#222; color:#fff; max-width:180px;">
+            <option value="lobby">🏢 共同辦公室</option>
+        </select>
+    </div>
 
     <script src="/static/vendor/phaser-3.80.1.min.js?v={{VERSION_TIMESTAMP}}"></script>
     <script>
         // 简易中英文切换
         let uiLang = localStorage.getItem('uiLang') || 'en';
+
+        // === Phase 2: 房間系統 ===
+        let currentRoom = 'lobby'; // 'lobby' = 共同辦公室, 其他 = agent ID
+        let roomsCache = [];       // 房間清單快取
+
+        function loadRoomList() {
+            fetch('/api/rooms').then(r => r.json()).then(data => {
+                if (!data.ok) return;
+                roomsCache = data.rooms;
+                const sel = document.getElementById('room-select');
+                if (!sel) return;
+                sel.innerHTML = '<option value="lobby">🏢 ' + (uiLang.startsWith('zh') ? '共同辦公室' : uiLang === 'ja' ? '共同オフィス' : 'Shared Office') + '</option>';
+                data.rooms.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.roomId;
+                    opt.textContent = r.displayName;
+                    if (r.roomId === currentRoom) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            }).catch(() => {});
+        }
+
+        function switchRoom(roomId) {
+            currentRoom = roomId;
+            if (roomId === 'lobby') {
+                // 回到大廳：恢復正常輪詢
+                applyLanguage();
+                fetchStatus();
+                return;
+            }
+            // 進入個人辦公室
+            fetch('/api/rooms/' + roomId).then(r => r.json()).then(data => {
+                if (!data.ok) return;
+                // 更新辦公室名稱
+                if (window.officePlaqueText && window.officePlaqueText.setText) {
+                    window.officePlaqueText.setText(data.roomName);
+                }
+                // 更新狀態文字
+                const agent = data.agent || {};
+                const stateInfo = typeof STATES !== 'undefined' ? (STATES[agent.state] || STATES.idle) : { name: agent.state };
+                typewriterTarget = '[' + (stateInfo.name || agent.state) + '] ' + (agent.detail || '...');
+                typewriterText = '';
+                typewriterIndex = 0;
+                // 更新 memo 面板
+                const memoEl = document.getElementById('memo-content');
+                const memoDateEl = document.getElementById('memo-date');
+                if (data.memo && data.memo.content) {
+                    if (memoDateEl) memoDateEl.textContent = data.memo.date || '';
+                    if (memoEl) {
+                        const lines = data.memo.content.split('\n').filter(l => l.trim()).slice(0, 8);
+                        memoEl.innerHTML = lines.map(l => '<p style="margin:4px 0">· ' + l.replace(/<[^>]*>/g,'').substring(0, 60) + (l.length > 60 ? '...' : '') + '</p>').join('');
+                    }
+                } else {
+                    if (memoDateEl) memoDateEl.textContent = '';
+                    if (memoEl) memoEl.innerHTML = '<div id="memo-placeholder" style="color:#9ca3af;font-size:12px;text-align:center;padding:20px 0;">此 Agent 尚無記憶檔案</div>';
+                }
+                // 更新 Star 狀態標題
+                const titleEl = document.getElementById('control-bar-title');
+                if (titleEl) titleEl.textContent = agent.displayName + ' 狀態';
+            }).catch(e => console.error('switchRoom error', e));
+        }
+
+        // 訪客卡片「進入房間」
+        function enterAgentRoom(idOrName) {
+            // 先嘗試直接用 agent ID 匹配
+            let room = roomsCache.find(r => r.roomId === idOrName);
+            // 若不到，嘗試用顯示名稱匹配
+            if (!room) room = roomsCache.find(r => r.displayName === idOrName);
+            if (!room) {
+                console.warn('enterAgentRoom: no room found for', idOrName);
+                return;
+            }
+            const sel = document.getElementById('room-select');
+            if (sel) sel.value = room.roomId;
+            switchRoom(room.roomId);
+        }
+
         const I18N = {
             zh: {
                 controlTitle: 'Star 状态',
@@ -3564,7 +3647,9 @@ function toggleBrokerPanel() {
                 const stateText = stateMap[state] || state;
                 const subtitle = `${statusText} · ${stateText}`;
 
-                const pendingActions = `<button onclick="alert('交换 skill 功能开发中')">交换skill</button><button class="leave-btn" onclick="leaveGuestAgent('${agent.agentId}','${name}')">离开房间</button>`;
+                const agentRoomId = agent.agentId ? agent.agentId.replace(/^agent_\d+_/, '').replace(/_.*$/, '') : '';
+                const openclawId = agent.openclawId || '';
+                const pendingActions = `<button onclick="alert('交换 skill 功能开发中')">交换skill</button><button onclick="enterAgentRoom('${openclawId || name.replace(/'/g, "\\'")}')">🏠進房間</button><button class="leave-btn" onclick="leaveGuestAgent('${agent.agentId}','${name}')">离开房间</button>`;
 
                 return `
                   <div class="guest-agent-item" data-name="${name}">
@@ -4037,6 +4122,7 @@ function toggleBrokerPanel() {
 
             console.log('WebP 支持:', supportsWebP);
             applyLanguage();
+            loadRoomList(); // Phase 2: 載入房間清單
             updateSpeedModeUI();
 
 
@@ -4785,6 +4871,8 @@ function toggleBrokerPanel() {
         }
 
         function fetchStatus() {
+            // Phase 2: 在個人辦公室時不輪詢主 status
+            if (currentRoom !== 'lobby') return Promise.resolve();
             return fetch('/status', { cache: 'no-store' })
                 .then(response => response.json())
                 .then(data => {

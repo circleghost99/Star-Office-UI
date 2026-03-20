@@ -98,6 +98,29 @@ app.config.update(
 # Guard join-agent critical section to enforce per-key concurrency under parallel requests
 join_lock = threading.Lock()
 
+# ========================================
+# Phase 4: SSE Event System
+# ========================================
+import queue
+import time as _time
+
+_sse_subscribers = []  # list of queue.Queue
+_sse_lock = threading.Lock()
+
+def sse_emit(event_type, data):
+    """Send an event to all SSE subscribers"""
+    import json as _json
+    payload = {"type": event_type, "data": data, "ts": datetime.now().isoformat()}
+    with _sse_lock:
+        dead = []
+        for q in _sse_subscribers:
+            try:
+                q.put_nowait(payload)
+            except Exception:
+                dead.append(q)
+        for q in dead:
+            _sse_subscribers.remove(q)
+
 # Async background task registry for long-running operations (e.g. image generation)
 # Avoids Cloudflare 524 timeout (100s limit) by letting frontend poll for completion.
 _bg_tasks = {}  # task_id -> {"status": "pending"|"done"|"error", "result": ..., "error": ..., "created_at": ...}
@@ -1097,6 +1120,14 @@ def join_agent():
             save_agents_state(agents)
             save_join_keys(keys_data)
 
+            # Phase 4: SSE event
+            sse_emit("agent_join", {
+                "agentId": agent_id,
+                "name": name,
+                "state": state,
+                "openclawId": openclaw_id,
+            })
+
         return jsonify({"ok": True, "agentId": agent_id, "authStatus": "approved", "nextStep": "已自动批准，立即开始推送状态"})
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
@@ -1233,6 +1264,16 @@ def agent_push():
         target["lastPushAt"] = datetime.now().isoformat()
 
         save_agents_state(agents)
+
+        # Phase 4: SSE event
+        sse_emit("agent_state_change", {
+            "agentId": agent_id,
+            "name": target.get("name", ""),
+            "state": state,
+            "detail": detail,
+            "openclawId": target.get("openclawId", ""),
+        })
+
         return jsonify({"ok": True, "agentId": agent_id, "area": target.get("area")})
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
@@ -2186,6 +2227,59 @@ def api_room_detail(agent_name):
             "skills": agent.get("skills", []),
         }
         return jsonify({"ok": True, **room})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+# ========================================
+# Phase 4: SSE Endpoint
+# ========================================
+
+@app.route("/events", methods=["GET"])
+def sse_events():
+    """SSE 長連線，推送即時事件"""
+    import json as _json
+
+    q = queue.Queue(maxsize=100)
+    with _sse_lock:
+        _sse_subscribers.append(q)
+
+    def generate():
+        try:
+            while True:
+                try:
+                    event = q.get(timeout=15)
+                    yield f"event: {event['type']}\ndata: {_json.dumps(event, ensure_ascii=False)}\n\n"
+                except queue.Empty:
+                    # Keep-alive heartbeat
+                    yield f": heartbeat {datetime.now().isoformat()}\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            with _sse_lock:
+                if q in _sse_subscribers:
+                    _sse_subscribers.remove(q)
+
+    return app.response_class(
+        generate(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        }
+    )
+
+
+@app.route("/api/events/emit", methods=["POST"])
+def api_emit_event():
+    """手動發送 SSE 事件（用於 task_flow 等）"""
+    try:
+        data = request.get_json()
+        event_type = data.get("type", "custom")
+        event_data = data.get("data", {})
+        sse_emit(event_type, event_data)
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
 

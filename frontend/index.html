@@ -936,6 +936,60 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
+
+        /* === Phase 4: Task Flow Animation + Toast === */
+        .task-flow-envelope {
+            position: fixed;
+            z-index: 1000060;
+            font-size: 28px;
+            pointer-events: none;
+            filter: drop-shadow(0 2px 6px rgba(233,69,96,0.5));
+            transition: none;
+        }
+        @keyframes envelope-fly {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            50% { transform: scale(1.3) rotate(-10deg); opacity: 1; }
+            100% { transform: scale(0.8) rotate(5deg); opacity: 0; }
+        }
+        .sse-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(26,26,46,0.95);
+            border: 1px solid #e94560;
+            border-radius: 8px;
+            padding: 10px 20px;
+            color: #fff;
+            font-family: 'ArkPixel', monospace;
+            font-size: 13px;
+            z-index: 1000060;
+            box-shadow: 0 0 20px rgba(233,69,96,0.3);
+            animation: toast-in 0.3s ease-out, toast-out 0.3s ease-in 2.7s forwards;
+        }
+        @keyframes toast-in {
+            from { transform: translateX(-50%) translateY(30px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        @keyframes toast-out {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        .agent-bubble {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 20px;
+            animation: bubble-pop 1.5s ease-out forwards;
+            pointer-events: none;
+        }
+        @keyframes bubble-pop {
+            0% { transform: translateX(-50%) translateY(0) scale(0.5); opacity: 0; }
+            20% { transform: translateX(-50%) translateY(-5px) scale(1.2); opacity: 1; }
+            80% { transform: translateX(-50%) translateY(-5px) scale(1); opacity: 1; }
+            100% { transform: translateX(-50%) translateY(-15px) scale(0.8); opacity: 0; }
+        }
         /* Memo 区域 - 4:3 小正方形 */
         #memo-panel {
             position: relative;
@@ -1605,6 +1659,120 @@
                 content.innerHTML = '<div style="color:#e94560;">載入失敗：' + e.message + '</div>';
             });
         }
+
+        // ========================================
+        // Phase 4: SSE EventSource + Task Flow
+        // ========================================
+        let sseSource = null;
+        let sseConnected = false;
+
+        function initSSE() {
+            if (sseSource) {
+                sseSource.close();
+            }
+            sseSource = new EventSource('/events');
+
+            sseSource.onopen = function() {
+                sseConnected = true;
+                console.log('[SSE] Connected');
+            };
+
+            sseSource.onerror = function() {
+                sseConnected = false;
+                console.warn('[SSE] Connection lost, will retry...');
+            };
+
+            // Agent state change → instant UI update
+            sseSource.addEventListener('agent_state_change', function(e) {
+                try {
+                    const evt = JSON.parse(e.data);
+                    const d = evt.data;
+                    console.log('[SSE] agent_state_change:', d.name, d.state);
+                    // Refresh guest agents list
+                    if (typeof fetchGuestAgents === 'function') fetchGuestAgents();
+                    // If this is main agent and we're in lobby, refresh status
+                    if (currentRoom === 'lobby' && typeof fetchStatus === 'function') fetchStatus();
+                } catch(err) {
+                    console.error('[SSE] parse error:', err);
+                }
+            });
+
+            // Agent join → toast + refresh
+            sseSource.addEventListener('agent_join', function(e) {
+                try {
+                    const evt = JSON.parse(e.data);
+                    const d = evt.data;
+                    showSSEToast('📥 ' + d.name + ' 進入辦公室');
+                    if (typeof fetchGuestAgents === 'function') fetchGuestAgents();
+                } catch(err) {}
+            });
+
+            // Task flow → envelope animation
+            sseSource.addEventListener('task_flow', function(e) {
+                try {
+                    const evt = JSON.parse(e.data);
+                    const d = evt.data;
+                    // d.from, d.to, d.task
+                    showSSEToast('✉️ ' + (d.fromName||d.from) + ' → ' + (d.toName||d.to) + ': ' + (d.task||'任務傳遞'));
+                    animateEnvelope(d);
+                } catch(err) {}
+            });
+        }
+
+        function showSSEToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'sse-toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3200);
+        }
+
+        function animateEnvelope(data) {
+            // Create floating envelope that flies across screen
+            const envelope = document.createElement('div');
+            envelope.className = 'task-flow-envelope';
+            envelope.textContent = '✉️';
+
+            // Start from left-center, fly to right-center
+            const startX = window.innerWidth * 0.2;
+            const startY = window.innerHeight * 0.35;
+            const endX = window.innerWidth * 0.7;
+            const endY = window.innerHeight * 0.35;
+
+            envelope.style.left = startX + 'px';
+            envelope.style.top = startY + 'px';
+            document.body.appendChild(envelope);
+
+            // Animate with requestAnimationFrame
+            const duration = 1500;
+            const startTime = performance.now();
+
+            function step(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                // Ease out cubic
+                const eased = 1 - Math.pow(1 - progress, 3);
+                const x = startX + (endX - startX) * eased;
+                // Arc: rise then fall
+                const arcY = startY - Math.sin(progress * Math.PI) * 80;
+                envelope.style.left = x + 'px';
+                envelope.style.top = arcY + 'px';
+                envelope.style.opacity = progress > 0.8 ? String(1 - (progress - 0.8) / 0.2) : '1';
+                envelope.style.transform = 'rotate(' + (progress * 15 - 7) + 'deg) scale(' + (1 + Math.sin(progress * Math.PI) * 0.3) + ')';
+
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    if (envelope.parentNode) envelope.parentNode.removeChild(envelope);
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        // Auto-connect SSE on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(initSSE, 2000); // Wait for initial load
+        });
 
         const I18N = {
             zh: {

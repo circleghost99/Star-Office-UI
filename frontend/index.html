@@ -1302,16 +1302,37 @@
         body.nest-mode #coords-overlay,
         body.nest-mode #loading-overlay,
         body.nest-mode #asset-drawer,
+        body.nest-mode #bottom-panels,
         body.nest-mode #display-settings-btn { display: none !important; }
 
         body.nest-mode #game-container {
             width: 100vw !important;
-            height: 78vh !important;
+            height: 100vh !important;
             max-width: 100vw !important;
-            max-height: 78vh !important;
+            max-height: 100vh !important;
             border: none !important;
             border-radius: 0 !important;
             aspect-ratio: auto !important;
+            transition: height 0.3s ease;
+        }
+        /* Tap to show panels */
+        body.nest-mode.nest-panels-visible #bottom-panels {
+            display: flex !important;
+            flex-direction: row !important;
+            animation: nest-slide-up 0.3s ease-out;
+        }
+        body.nest-mode.nest-panels-visible #lang-toggle-group,
+        body.nest-mode.nest-panels-visible #room-selector {
+            display: flex !important;
+            animation: nest-slide-up 0.3s ease-out;
+        }
+        body.nest-mode.nest-panels-visible #game-container {
+            height: 72vh !important;
+            max-height: 72vh !important;
+        }
+        @keyframes nest-slide-up {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
         body.nest-mode #main-stage {
             width: 100vw !important;
@@ -1372,8 +1393,16 @@
     <script>
         if (location.search.includes('nest')) {
             document.body.classList.add('nest-mode');
-            // Prevent screen from going to sleep (Nest Hub cast workaround)
             document.title = 'Star Office 🏢';
+            // Tap to toggle bottom panels
+            let nestPanelTimer = null;
+            document.addEventListener('click', function() {
+                document.body.classList.add('nest-panels-visible');
+                clearTimeout(nestPanelTimer);
+                nestPanelTimer = setTimeout(function() {
+                    document.body.classList.remove('nest-panels-visible');
+                }, 8000);
+            });
         }
     </script>
     <!-- 加载遮罩 -->

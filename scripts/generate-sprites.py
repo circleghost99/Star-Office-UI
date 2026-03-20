@@ -38,7 +38,7 @@ SHEET_H = FRAME_SIZE * GRID_ROWS   # 64 px
 
 # ── Agent 角色設定（可自訂） ──
 AGENT_PERSONAS = {
-    "lobster-support":   {"animal": "lobster",  "color": "red",       "accessory": "captain hat"},
+    "lobster-support":   {"animal": "hamster",  "color": "red-brown",  "accessory": "captain hat and anchor badge"},
     "hamster-collector": {"animal": "hamster",  "color": "orange",    "accessory": "explorer backpack"},
     "hamster-editor":    {"animal": "hamster",  "color": "brown",     "accessory": "reading glasses and book"},
     "hamster-writer":    {"animal": "hamster",  "color": "golden",    "accessory": "quill pen"},
@@ -133,9 +133,11 @@ def find_output(base_path):
 
 
 def make_spritesheet(source_image_path, output_path, format="WEBP"):
-    """將單一角色圖裁切/縮放成 128×64 精靈表（32×32 × 8 幀）"""
+    """將單一角色圖裁切/縮放成 128×64 精靈表（32×32 × 8 幀）
+    用 Pillow 做 4 個走動姿勢：idle, lean-left, idle, lean-right（模擬走動）
+    """
     try:
-        from PIL import Image
+        from PIL import Image, ImageChops
     except ImportError:
         print("❌ 需要 Pillow: pip install Pillow")
         sys.exit(1)
@@ -143,18 +145,34 @@ def make_spritesheet(source_image_path, output_path, format="WEBP"):
     img = Image.open(source_image_path).convert("RGBA")
 
     # 縮放到 32×32
-    frame = img.resize((FRAME_SIZE, FRAME_SIZE), Image.NEAREST)
+    base_frame = img.resize((FRAME_SIZE, FRAME_SIZE), Image.LANCZOS)
 
-    # 建立 128×64 的精靈表（8 幀，全部相同但可以做微調）
+    # === 產生 4 個走動姿勢 ===
+    # Frame 0: idle (原始)
+    f0 = base_frame.copy()
+
+    # Frame 1: lean left + bob up (左傾 + 上移)
+    f1 = Image.new("RGBA", (FRAME_SIZE, FRAME_SIZE), (0, 0, 0, 0))
+    f1.paste(base_frame, (-1, -1))  # 左移 1px, 上移 1px
+
+    # Frame 2: idle (微調)
+    f2 = base_frame.copy()
+
+    # Frame 3: lean right + bob up (右傾 + 上移)
+    f3 = Image.new("RGBA", (FRAME_SIZE, FRAME_SIZE), (0, 0, 0, 0))
+    f3.paste(base_frame, (1, -1))  # 右移 1px, 上移 1px
+
+    # 8 幀循環：idle, left, idle, right, idle, left, idle, right
+    frames = [f0, f1, f2, f3, f0, f1, f2, f3]
+
+    # 建立 128×64 的精靈表
     sheet = Image.new("RGBA", (SHEET_W, SHEET_H), (0, 0, 0, 0))
-
-    for row in range(GRID_ROWS):
-        for col in range(GRID_COLS):
-            # 對每幀做微小偏移模擬走動動畫
-            offset_y = -1 if (col + row) % 2 == 1 else 0
-            x = col * FRAME_SIZE
-            y = row * FRAME_SIZE + offset_y
-            sheet.paste(frame, (x, max(0, y)))
+    for idx, frame in enumerate(frames):
+        col = idx % GRID_COLS
+        row = idx // GRID_COLS
+        x = col * FRAME_SIZE
+        y = row * FRAME_SIZE
+        sheet.paste(frame, (x, y))
 
     # 儲存
     if format == "WEBP":
@@ -162,7 +180,92 @@ def make_spritesheet(source_image_path, output_path, format="WEBP"):
     else:
         sheet.save(output_path, "PNG")
 
-    print(f"   📋 精靈表: {output_path} ({SHEET_W}×{SHEET_H})")
+    print(f"   📋 精靈表: {output_path} ({SHEET_W}×{SHEET_H}, 4 poses × 2 rows)")
+    return True
+
+
+def generate_walk_poses(base_image_path, agent_id, style=""):
+    """用 nano-banana-pro 的 edit 模式產生走動姿勢變化"""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+
+    poses = {}
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Pose 1: 左腳踏出
+    pose_prompts = [
+        ("left_step", "edit this pixel art character to show it leaning slightly left with left arm forward, walking pose, keep same style and colors"),
+        ("right_step", "edit this pixel art character to show it leaning slightly right with right arm forward, walking pose, keep same style and colors"),
+        ("bounce", "edit this pixel art character to show it slightly squished/bouncing down, cute bounce animation frame, keep same style and colors"),
+    ]
+
+    for pose_name, prompt in pose_prompts:
+        out_path = OUTPUT_DIR / f"{agent_id}-{pose_name}.png"
+        cmd = [
+            "uv", "run", str(SKILL_SCRIPT),
+            "--prompt", prompt,
+            "--filename", str(out_path),
+            "-i", str(base_image_path),
+            "--resolution", "1K",
+            "--aspect-ratio", "1:1",
+        ]
+        print(f"   🎨 產生 {pose_name} 姿勢...")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+        actual = find_output(out_path)
+        if actual:
+            poses[pose_name] = actual
+            print(f"   ✅ {pose_name}: {actual.name}")
+        else:
+            print(f"   ⚠️  {pose_name} 失敗，使用 Pillow 偏移替代")
+
+    return poses
+
+
+def make_animated_spritesheet(base_image_path, poses, output_path, format="WEBP"):
+    """用產生的多姿勢圖片組裝精靈表"""
+    try:
+        from PIL import Image
+    except ImportError:
+        print("❌ 需要 Pillow")
+        sys.exit(1)
+
+    base = Image.open(base_image_path).convert("RGBA")
+    base_frame = base.resize((FRAME_SIZE, FRAME_SIZE), Image.LANCZOS)
+
+    # 載入各姿勢，失敗則用偏移替代
+    def load_pose(name, dx, dy):
+        if name in poses and poses[name].exists():
+            img = Image.open(poses[name]).convert("RGBA")
+            return img.resize((FRAME_SIZE, FRAME_SIZE), Image.LANCZOS)
+        else:
+            f = Image.new("RGBA", (FRAME_SIZE, FRAME_SIZE), (0, 0, 0, 0))
+            f.paste(base_frame, (dx, dy))
+            return f
+
+    f_idle = base_frame.copy()
+    f_left = load_pose("left_step", -1, -1)
+    f_right = load_pose("right_step", 1, -1)
+    f_bounce = load_pose("bounce", 0, 1)
+
+    # 走動循環：idle → left → bounce → right → idle → left → bounce → right
+    frames = [f_idle, f_left, f_bounce, f_right, f_idle, f_left, f_bounce, f_right]
+
+    # 組裝
+    sheet = Image.new("RGBA", (SHEET_W, SHEET_H), (0, 0, 0, 0))
+    for idx, frame in enumerate(frames):
+        col = idx % GRID_COLS
+        row = idx // GRID_COLS
+        sheet.paste(frame, (col * FRAME_SIZE, row * FRAME_SIZE))
+
+    if format == "WEBP":
+        sheet.save(output_path, "WEBP", quality=95)
+    else:
+        sheet.save(output_path, "PNG")
+
+    print(f"   📋 動畫精靈表: {output_path} ({SHEET_W}×{SHEET_H}, 4 poses)")
     return True
 
 
@@ -193,7 +296,7 @@ def process_agent(agent, slot_index, style="", dry_run=False):
         print(f"   ⏭️  --dry-run, 跳過產生")
         return True
 
-    # 1. 產生原始圖
+    # 1. 產生原始圖（idle pose）
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     raw_path = OUTPUT_DIR / f"{agent_id}-raw.png"
     if not generate_single_image(prompt, raw_path):
@@ -204,15 +307,22 @@ def process_agent(agent, slot_index, style="", dry_run=False):
         print(f"   ❌ 找不到原始圖")
         return False
 
-    # 2. 製作精靈表
+    # 2. 產生走動姿勢（用 edit 模式）
+    print(f"\n   🚶 產生走動動畫姿勢...")
+    poses = generate_walk_poses(actual_raw, agent_id, style)
+    if poses is None:
+        poses = {}
+
+    # 3. 備份舊精靈圖
     anim_path = FRONTEND_DIR / f"guest_anim_{slot}.webp"
     role_path = FRONTEND_DIR / f"guest_role_{slot}.png"
 
     backup_existing(anim_path)
     backup_existing(role_path)
 
-    make_spritesheet(actual_raw, anim_path, "WEBP")
-    make_spritesheet(actual_raw, role_path, "PNG")
+    # 4. 組裝動畫精靈表
+    make_animated_spritesheet(actual_raw, poses, anim_path, "WEBP")
+    make_animated_spritesheet(actual_raw, poses, role_path, "PNG")
 
     return True
 

@@ -55,6 +55,16 @@ AGENT_PERSONAS = {
 DEFAULT_PERSONA = {"animal": "robot", "color": "blue", "accessory": "antenna"}
 
 
+def agent_slot(agent_id, max_slots=6):
+    """用跟前端 Phaser JS 一樣的 hash 來決定 slot (1-indexed)
+    JS: hash = (hash * 31 + charCode) >>> 0; slot = (hash % 6) + 1
+    """
+    h = 0
+    for c in agent_id:
+        h = (h * 31 + ord(c)) & 0xFFFFFFFF
+    return (h % max_slots) + 1
+
+
 def load_agents():
     """從 agent_discovery 模組讀取所有 agent"""
     sys.path.insert(0, str(PROJECT_DIR / "backend"))
@@ -345,8 +355,10 @@ def main():
         for i, a in enumerate(guest_agents):
             persona = AGENT_PERSONAS.get(a["id"], DEFAULT_PERSONA)
             marker = "✅" if a["id"] in AGENT_PERSONAS else "🤖"
-            print(f"  {i+1}. {marker} {a['name']} ({a['id']}) → {persona['animal']}")
+            slot = agent_slot(a["id"])
+            print(f"  {i+1}. {marker} {a['name']} ({a['id']}) → {persona['animal']} [slot {slot}]")
         print(f"\n  ✅ = 已設定角色  🤖 = 使用預設")
+        print(f"  ⚠️  同 slot 的 agent 會共用精靈圖（以最後產生的為準）")
         return
 
     # 篩選
@@ -365,12 +377,14 @@ def main():
     print(f"   模式: {'預覽' if args.dry_run else '產生'}")
 
     success = 0
+    processed_slots = set()
     for i, agent in enumerate(targets):
-        if args.agent:
-            # 找到這個 agent 在 guest list 中的 slot
-            slot = next((j for j, a in enumerate(guest_agents) if a["id"] == agent["id"]), i)
-        else:
-            slot = i
+        # 用跟前端一樣的 hash 決定 slot
+        slot = agent_slot(agent["id"]) - 1  # 0-indexed for process_agent
+        if slot in processed_slots:
+            print(f"\n   ⚠️  {agent['id']} 的 slot {slot+1} 已有其他角色，跳過")
+            continue
+        processed_slots.add(slot)
 
         if process_agent(agent, slot, args.style, args.dry_run):
             success += 1

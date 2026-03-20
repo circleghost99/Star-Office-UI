@@ -1073,7 +1073,8 @@
             #pan-toggle,
             #lang-btn-en,
             #lang-btn-jp,
-            #lang-btn-cn {
+            #lang-btn-cn,
+            #lang-btn-tw {
                 font-size: 12px !important;
                 padding: 6px 8px !important;
             }
@@ -1285,6 +1286,7 @@
         <button id="lang-btn-en" onclick="setUILanguage('en')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">EN</button>
         <button id="lang-btn-jp" onclick="setUILanguage('ja')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">JP</button>
         <button id="lang-btn-cn" onclick="setUILanguage('zh')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">CN</button>
+        <button id="lang-btn-tw" onclick="setUILanguage('zh-tw')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">TW</button>
     </div>
 
     <script src="/static/vendor/phaser-3.80.1.min.js?v={{VERSION_TIMESTAMP}}"></script>
@@ -1375,6 +1377,34 @@
                 showCoords: '座標表示', hideCoords: '座標非表示', moveView: '視点移動', lockView: '視点固定',
                 memoTitle: '昨日のメモ', guestTitle: '訪問者リスト', officeTitle: 'ハイシン・ロブスターのオフィス',
                 loadingOffice: 'Star のピクセルオフィスを読み込み中...'
+            },
+            'zh-tw': {
+                controlTitle: 'Star 狀態',
+                btnIdle: '待命', btnWork: '工作', btnSync: '同步', btnError: '報警', btnDecor: '裝修房間',
+                drawerTitle: '裝修房間 · 資產側邊欄', drawerClose: '關閉',
+                authTitle: '請輸入裝修驗證碼', authPlaceholder: '輸入驗證碼', authVerify: '驗證', authDefaultPassHint: '預設密碼：1234（可隨時讓我幫你改，建議改成強密碼）',
+                drawerVisibilityTip: '可見性：點擊條目右側眼睛按鈕切換該資產顯示',
+                hideDrawer: '👁 隱藏側邊欄', showDrawer: '👁 顯示側邊欄',
+                assetHide: '隱藏', assetShow: '顯示',
+                resetToDefault: '重置為預設資產', restorePrevAsset: '用上一版',
+                btnMove: '📦 搬新家', btnHome: '🐚 回老家', btnHomeLast: '↩️ 回上一個家', btnHomeFavorite: '⭐ 收藏這個家', btnBroker: '🤝 找仲介', btnDIY: '🪚 自己裝', btnBrokerGo: '聽仲介的',
+                homeFavTitle: '🏠 收藏的家', homeFavEmpty: '還沒有收藏，先點「⭐ 收藏這個家」', homeFavApply: '替換到目前地圖', homeFavDelete: '刪除', homeFavSaved: '✅ 已收藏目前地圖', homeFavApplied: '✅ 已替換為收藏地圖', homeFavDeleted: '🗑️ 已刪除收藏',
+                brokerHint: '你會給龍蝦推薦什麼樣的房子',
+                brokerPromptPh: '例如：故宮主題、莫內風格、地牢主題、兵馬俑主題……',
+                brokerNeedPrompt: '請先輸入仲介方案描述',
+                brokerGenerating: '🏘️ 正在按仲介方案生成底圖，請稍候（約20-90秒）...',
+                brokerDone: '✅ 已按仲介方案生成並替換底圖，正在重新整理房間...',
+                moveSuccess: '✅ 搬家成功！',
+                brokerMissingKey: '❌ 生圖失敗：缺少 GEMINI API Key，請在下方填寫並儲存後重試',
+                geminiPanelTitle: '🔐 API 設定（可摺疊）', geminiHint: '可選：填寫你的生圖 API Key（留空不影響基礎功能）', geminiApiDoc: '📘 如何申請 Google API Key', geminiInputPh: '貼上 GEMINI_API_KEY（不會回顯）', geminiSaveKey: '儲存 Key', geminiMaskNoKey: '目前狀態：未設定 Key', geminiMaskHasKey: '目前已設定：',
+                speedModeLabel: '生成模式', speedFast: '🍌2', speedQuality: '🍌Pro',
+                searchPlaceholder: '搜尋資產名（如 desk / sofa / star）', loaded: '已載入', allAssets: '全部資產',
+                chooseImage: '上傳素材', confirmUpload: '確認重新整理', resetToDefault: '重置預設', restorePrevAsset: '恢復上版', uploadPending: '待上傳', uploadTarget: '目標',
+                assetHintNotInScene: '目前場景未偵測到此物件，仍可替換檔案（重新整理後生效）',
+                assetHintDefault: '通用素材：建議保持原圖尺寸、透明通道與視覺重心一致，避免錯位或失真',
+                showCoords: '顯示座標', hideCoords: '隱藏座標', moveView: '移動視野', lockView: '鎖定視野',
+                memoTitle: '昨 日 小 記', guestTitle: '訪 客 列 表', officeTitle: '海辛小龍蝦的辦公室',
+                loadingOffice: '正在載入 Star 的像素辦公室...'
             }
         };
 
@@ -1407,7 +1437,8 @@
             const langButtons = [
                 { id: 'lang-btn-en', lang: 'en' },
                 { id: 'lang-btn-jp', lang: 'ja' },
-                { id: 'lang-btn-cn', lang: 'zh' }
+                { id: 'lang-btn-cn', lang: 'zh' },
+                { id: 'lang-btn-tw', lang: 'zh-tw' }
             ];
             langButtons.forEach(({ id, lang }) => {
                 const el = document.getElementById(id);
@@ -1476,7 +1507,7 @@
         }
 
         function setUILanguage(lang) {
-            if (!['zh', 'en', 'ja'].includes(lang)) return;
+            if (!['zh', 'en', 'ja', 'zh-tw'].includes(lang)) return;
             uiLang = lang;
             localStorage.setItem('uiLang', uiLang);
             applyLanguage();
@@ -1648,6 +1679,15 @@
                 syncing: ['同期中：今日をクラウドに封印。','バックアップは儀式じゃなく安心。','書き込み中…電源オフ厳禁。','変更はタイムスタンプへ。','クラウド整列：カチッ。','同期完了まで触らないで。','未来の自分を災害から救う。','バックアップ一つ、後悔一つ減る。'],
                 error: ['警報：まず落ち着いて。','バグの気配を感じる。','再現してから修正へ。','ログをください、人語にします。','エラーは敵ではなく手がかり。','まず影響範囲を囲う。','止血してから手術。','今すぐ根因を追跡中。','大丈夫、よくある案件。','警戒モード：問題を可視化する。'],
                 cat: ['ニャー','ゴロゴロ…','しっぽフリフリ。','ひなたぼっこ最高。','見に来てくれた！','このオフィスのマスコットです。','ぐーっと伸び。','今日のおやつ、準備できた？','ゴロゴロ。','ここ、いちばん見晴らしがいい。']
+            },
+            'zh-tw': {
+                idle: ['待命中：耳朵豎起來了','我在這兒，隨時可以開工','先把桌面收拾乾淨再說','呼——給大腦放個風','今天也要優雅地高效','等待，是為了更準確的一擊','咖啡還熱，靈感也還在','我在後台幫你加 Buff','狀態：靜心 / 充電','小貓說：慢一點也沒關係'],
+                writing: ['進入專注模式：勿擾','先把關鍵路徑跑通','我來把複雜變簡單','把 bug 關進籠子裡','寫到一半，先存檔','把每一步都做成可回滾','今天的進度，明天的底氣','先收斂，再發散','讓系統變得更可解釋','穩住，我們能贏'],
+                researching: ['我在挖證據鏈','讓我把資訊熬成結論','找到了：關鍵在這裡','先把變數控制住','我在查：它為什麼會這樣','把直覺寫成驗證','先定位，再優化','別急，先畫因果圖'],
+                executing: ['執行中：不要眨眼','把任務切成小塊逐個擊破','開始跑 pipeline','一鍵推進：走你','讓結果自己說話','先做最小可行，再做最美版本'],
+                syncing: ['同步中：把今天鎖進雲裡','備份不是儀式，是安全感','寫入中…別斷電','把變更交給時間戳','雲端對齊：咔噠','同步完成前先別亂動','把未來的自己從災難裡救出來','多一份備份，少一份後悔'],
+                error: ['警報響了：先別慌','我聞到 bug 的味道了','先重現，再談修復','把日誌給我，我會說人話','錯誤不是敵人，是線索','把影響面圈起來','先止血，再手術','我在：馬上定位根因','別怕，這種我見多了','報警中：讓問題自己現形'],
+                cat: ['喵~','咕嚕咕嚕…','尾巴搖一搖','曬太陽最開心','有人來看我啦','我是這個辦公室的吉祥物','伸個懶腰','今天的罐罐準備好了嗎','呼嚕呼嚕','這個位置視野最好']
             }
         };
 
@@ -1872,6 +1912,30 @@
                     'guest_anim_4': '訪客アニメ 4',
                     'guest_anim_5': '訪客アニメ 5',
                     'guest_anim_6': '訪客アニメ 6'
+                },
+                'zh-tw': {
+                    'star-idle-v5': '主角·待機狀態',
+                    'star-working-spritesheet-grid': '主角·工作狀態',
+                    'sync-animation': '主角·同步狀態',
+                    'sync-animation-v3-grid': '主角·同步狀態',
+                    'error-bug-spritesheet-grid': '主角·報錯狀態',
+                    'cats-spritesheet': '隨機貓貓',
+                    'coffee-machine-v3-grid': '咖啡機',
+                    'coffee-machine-shadow-v1': '咖啡機陰影',
+                    'posters-spritesheet': '隨機海報',
+                    'serverroom-spritesheet': '伺服器房動畫',
+                    'plants-spritesheet': '隨機綠植',
+                    'flowers-bloom-v2': '隨機花朵',
+                    'office_bg_small': '辦公室背景',
+                    'memo-bg': '昨日小記底圖',
+                    'desk-v3': '辦公桌',
+                    'desk': '辦公桌（舊）',
+                    'guest_anim_1': '訪客動畫 1',
+                    'guest_anim_2': '訪客動畫 2',
+                    'guest_anim_3': '訪客動畫 3',
+                    'guest_anim_4': '訪客動畫 4',
+                    'guest_anim_5': '訪客動畫 5',
+                    'guest_anim_6': '訪客動畫 6'
                 }
             };
             const langMap = nameMap[lang] || nameMap.zh;
@@ -1977,6 +2041,39 @@
                 'guest_role_4': '訪客静止フォールバック画像 4。対応する guest_anim とデザインを揃えると切替時に自然です。',
                 'guest_role_5': '訪客静止フォールバック画像 5。対応する guest_anim とデザインを揃えると切替時に自然です。',
                 'guest_role_6': '訪客静止フォールバック画像 6。対応する guest_anim とデザインを揃えると切替時に自然です。'
+            },
+            'zh-tw': {
+                'office_bg_small': '主場景底圖（目前生效）。建議 1280×720（16:9），保留房間結構與視角，避免角色站位錯位。',
+                'office_bg': '歷史背景備份。通常不直接生效，建議與 office_bg_small 保持同構圖用於回退。',
+                'star-idle-v5': '主角待機動畫表。請保持 256×256 分幀與網格佈局一致，否則待機動作會錯幀。',
+                'star-working-spritesheet-grid': '主角工作動畫表（工位狀態）。請保持 300×300 分幀，建議人物重心與原圖一致。',
+                'sync-animation': '同步狀態素材（目前引用）。建議按 256×256 幀規範製作，避免同步狀態顯示靜止或抖動。',
+                'sync-animation-v3-grid': '同步動畫表（相容資源）。保持 256×256 網格可用於替換同步動作細節。',
+                'error-bug-spritesheet-grid': '報錯狀態動畫表。請保持 220×220 分幀，建議高對比度以增強異常提示感。',
+                'desk-v3': '辦公桌前景層。影響主角前後遮擋關係，建議保持當前比例與錨點視覺重心。',
+                'desk': '舊版辦公桌素材（相容用）。建議與 desk-v3 保持相近體積與錨點，避免遮擋異常。',
+                'sofa-idle-v3': '沙發靜態素材。建議保持 256×256 與透明背景，避免替換後位置漂移。',
+                'sofa-shadow-v1': '沙發陰影層。建議與沙發主體同座標疊放，增強貼地感。',
+                'memo-bg': '小記面板底圖。建議留出文字閱讀區域，降低高頻紋理，避免資訊難讀。',
+                'plants-spritesheet': '綠植隨機素材。保持 160×160 分幀，可一次替換多個綠植位的觀感。',
+                'posters-spritesheet': '海報隨機素材。保持 160×160 分幀，建議統一風格避免牆面雜亂。',
+                'cats-spritesheet': '貓咪隨機素材。保持 160×160 分幀，建議輪廓清晰、辨識度高。',
+                'coffee-machine-v3-grid': '咖啡機靜態素材。建議保持 230×230 與當前錨點，避免位置偏移。',
+                'coffee-machine-shadow-v1': '咖啡機陰影層。建議與咖啡機本體同寬對齊，增強貼地感。',
+                'serverroom-spritesheet': '伺服器房動畫表。保持 180×251 分幀，燈效變化建議節奏均勻不過閃。',
+                'flowers-bloom-v2': '花朵隨機素材。保持 128×128 分幀，建議色彩與整體辦公室主色協調。',
+                'guest_anim_1': '訪客動畫序列 1（32×32 分幀）。建議保持像素風、輪廓清晰，與主角風格統一。',
+                'guest_anim_2': '訪客動畫序列 2（32×32 分幀）。建議保持像素風、輪廓清晰，與主角風格統一。',
+                'guest_anim_3': '訪客動畫序列 3（32×32 分幀）。建議保持像素風、輪廓清晰，與主角風格統一。',
+                'guest_anim_4': '訪客動畫序列 4（32×32 分幀）。建議保持像素風、輪廓清晰，與主角風格統一。',
+                'guest_anim_5': '訪客動畫序列 5（32×32 分幀）。建議保持像素風、輪廓清晰，與主角風格統一。',
+                'guest_anim_6': '訪客動畫序列 6（32×32 分幀）。建議保持像素風、輪廓清晰，與主角風格統一。',
+                'guest_role_1': '訪客靜態形象備用圖 1。建議與對應 guest_anim 角色設定一致，避免切換割裂。',
+                'guest_role_2': '訪客靜態形象備用圖 2。建議與對應 guest_anim 角色設定一致，避免切換割裂。',
+                'guest_role_3': '訪客靜態形象備用圖 3。建議與對應 guest_anim 角色設定一致，避免切換割裂。',
+                'guest_role_4': '訪客靜態形象備用圖 4。建議與對應 guest_anim 角色設定一致，避免切換割裂。',
+                'guest_role_5': '訪客靜態形象備用圖 5。建議與對應 guest_anim 角色設定一致，避免切換割裂。',
+                'guest_role_6': '訪客靜態形象備用圖 6。建議與對應 guest_anim 角色設定一致，避免切換割裂。'
             }
         };
 
@@ -2804,6 +2901,22 @@ function toggleBrokerPanel() {
                     '次のデジタル海域をアンロックしています……',
                     '好奇心を最大値まで上げています……',
                     '旅が次の番地を届けるのを待っています……'
+                ],
+                'zh-tw': [
+                    '正在打包今天的靈感行李……',
+                    '正在抽取下一站數位座標……',
+                    '正在查看本次漂流目的地……',
+                    '正在把辦公室摺疊成隨身模式……',
+                    '正在給鉗子裝上遠行 Buff……',
+                    '正在匹配下一段創作氣候……',
+                    '正在把時差調成冒險模式……',
+                    '正在接收陌生街區的 Wi‑Fi 心跳……',
+                    '正在試播下一站的海風 BGM……',
+                    '正在載入「也許會愛上」的新房間……',
+                    '正在為未知鄰居準備自我介紹……',
+                    '正在解鎖下一片數位海域……',
+                    '正在把好奇心調到滿格……',
+                    '正在等待旅程投遞下一張門牌號……'
                 ]
             };
             const steps = loadingTexts[uiLang] || loadingTexts.zh;
@@ -3761,6 +3874,14 @@ function toggleBrokerPanel() {
                     executing: 'タスクを実行中です。',
                     syncing: '状態を同期中です。',
                     error: 'エラー発生！アラートエリアへ。'
+                },
+                'zh-tw': {
+                    idle: '我去休息區躺一下',
+                    writing: '我在工作中',
+                    researching: '我在調研中',
+                    executing: '我在執行任務',
+                    syncing: '我在同步狀態',
+                    error: '出錯了！我去報警區'
                 }
             };
             const bubbleTextMap = bubbleTextMapByLang[uiLang] || bubbleTextMapByLang.zh;
@@ -3871,7 +3992,8 @@ function toggleBrokerPanel() {
                                     const welcomeTexts = {
                                         zh: [`欢迎 ${newAgent.name} 来到办公室～`,`Hi ${newAgent.name}，一起开工吧`,`${newAgent.name} 已加入，欢迎！`],
                                         en: [`Welcome ${newAgent.name} to the office!`,`Hi ${newAgent.name}, let’s build something.`,`${newAgent.name} just joined — welcome!`],
-                                        ja: [`${newAgent.name} さん、オフィスへようこそ！`,`Hi ${newAgent.name}、一緒に進めよう。`,`${newAgent.name} さんが参加しました、歓迎！`]
+                                        ja: [`${newAgent.name} さん、オフィスへようこそ！`,`Hi ${newAgent.name}、一緒に進めよう。`,`${newAgent.name} さんが参加しました、歓迎！`],
+                                        'zh-tw': [`歡迎 ${newAgent.name} 來到辦公室～`,`Hi ${newAgent.name}，一起開工吧`,`${newAgent.name} 已加入，歡迎！`]
                                     };
                                     const langPack = BUBBLE_TEXTS[lang] || BUBBLE_TEXTS.zh;
                                     const oldTexts = Array.isArray(langPack.writing) ? [...langPack.writing] : [];

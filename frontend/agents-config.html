@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent 设定 - Star Office</title>
+    <style>
+        @font-face {
+            font-family: 'ArkPixel';
+            src: url('/static/fonts/ark-pixel-12px-proportional-zh_cn.ttf.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            font-family: 'ArkPixel', 'Courier New', monospace;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .nav { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .nav a {
+            color: #ffd700;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 2px solid #ffd700;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav a:hover, .nav a.active { background: #ffd700; color: #1a1a2e; }
+        h1 { color: #ffd700; font-size: 22px; margin-bottom: 20px; }
+        h2 { color: #e94560; font-size: 18px; margin: 20px 0 12px; }
+        .container {
+            background: #2c2f3a;
+            border: 3px solid #e94560;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+        }
+        .btn {
+            padding: 10px 20px;
+            font-family: 'ArkPixel', monospace;
+            font-size: 14px;
+            border: 2px solid #e94560;
+            border-radius: 6px;
+            background: #e94560;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: #ff6b81; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn-outline {
+            background: transparent;
+            border-color: #ffd700;
+            color: #ffd700;
+        }
+        .btn-outline:hover { background: #ffd700; color: #1a1a2e; }
+        .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+        .agent-card {
+            background: #3a3f4f;
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+        .agent-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 8px;
+            background: #2c2f3a;
+            object-fit: cover;
+            image-rendering: pixelated;
+            border: 2px solid #555;
+            flex-shrink: 0;
+        }
+        .agent-info { flex: 1; min-width: 0; }
+        .agent-name { font-size: 16px; color: #ffd700; margin-bottom: 4px; }
+        .agent-role { font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
+        .agent-state {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .state-idle { background: #1a3a2a; color: #22c55e; }
+        .state-writing { background: #3a2a1a; color: #ffd700; }
+        .state-error { background: #3a1a1a; color: #ef4444; }
+        .agent-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .memory-list { margin-top: 12px; }
+        .memory-item {
+            padding: 8px 12px;
+            background: #2c2f3a;
+            border-radius: 4px;
+            margin: 4px 0;
+            font-size: 12px;
+            color: #ddd;
+            cursor: pointer;
+        }
+        .memory-item:hover { background: #3a3f5f; }
+        .upload-area {
+            border: 2px dashed #555;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .upload-area:hover { border-color: #e94560; }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/security">安全监控</a>
+        <a href="/dashboard">成本面板</a>
+        <a href="/agents-config" class="active">Agent 设定</a>
+        <a href="/skills-page">技能管理</a>
+    </div>
+
+    <h1>Agent 设定</h1>
+
+    <div class="container">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+            <h2 style="margin:0">已发现的 Agents</h2>
+            <button class="btn" onclick="discoverAgents()">重新扫描</button>
+        </div>
+        <div class="agent-grid" id="agents-grid">
+            <div style="color:#94a3b8">加载中...</div>
+        </div>
+    </div>
+
+    <div class="container" id="memory-panel" style="display:none">
+        <h2 id="memory-title">Memory</h2>
+        <div id="memory-content" class="memory-list"></div>
+    </div>
+
+<script>
+function escapeHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function loadAgents() {
+    try {
+        const resp = await fetch('/api/agents/discover');
+        const agents = await resp.json();
+        const grid = document.getElementById('agents-grid');
+
+        if (!agents.length) { grid.innerHTML = '<div style="color:#94a3b8">未发现任何 Agent</div>'; return; }
+
+        grid.innerHTML = agents.map(a => {
+            const stateClass = a.state === 'error' ? 'state-error' : a.state === 'idle' ? 'state-idle' : 'state-writing';
+            const stateLabel = a.state || 'unknown';
+            return `
+            <div class="agent-card">
+                <img class="agent-avatar" src="/api/agents/${encodeURIComponent(a.id)}/avatar"
+                     onerror="this.src='/static/star_idle.webp'" alt="">
+                <div class="agent-info">
+                    <div class="agent-name">${escapeHtml(a.displayName || a.id)}</div>
+                    <div class="agent-role">${escapeHtml(a.role || '')}</div>
+                    <span class="agent-state ${stateClass}">${stateLabel}</span>
+                    <div class="agent-actions">
+                        <button class="btn btn-sm btn-outline" onclick="showMemory('${a.id}')">Memory</button>
+                        <button class="btn btn-sm btn-outline" onclick="downloadWorkspace('${a.id}')">下载工作区</button>
+                        <label class="btn btn-sm btn-outline">
+                            上传头像
+                            <input type="file" accept="image/*" onchange="uploadAvatar('${a.id}', this)">
+                        </label>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        document.getElementById('agents-grid').innerHTML = '<div style="color:#ef4444">加载失败</div>';
+    }
+}
+
+async function discoverAgents() {
+    loadAgents();
+}
+
+async function showMemory(agentId) {
+    const panel = document.getElementById('memory-panel');
+    const content = document.getElementById('memory-content');
+    document.getElementById('memory-title').textContent = `Memory - ${agentId}`;
+    panel.style.display = 'block';
+    content.innerHTML = '<div style="color:#94a3b8">加载中...</div>';
+    try {
+        const resp = await fetch(`/api/agents/${encodeURIComponent(agentId)}/memory`);
+        const files = await resp.json();
+        if (!files.length) { content.innerHTML = '<div style="color:#94a3b8">无 memory 文件</div>'; return; }
+        content.innerHTML = files.map(f =>
+            `<div class="memory-item" onclick="readMemory('${agentId}','${f.name}')">${escapeHtml(f.name)} <span style="color:#94a3b8">(${f.size} bytes)</span></div>`
+        ).join('');
+    } catch(e) {
+        content.innerHTML = '<div style="color:#ef4444">加载失败</div>';
+    }
+}
+
+async function readMemory(agentId, filename) {
+    try {
+        const resp = await fetch(`/api/agents/${encodeURIComponent(agentId)}/memory/${encodeURIComponent(filename)}`);
+        const data = await resp.json();
+        alert(data.content || '(empty)');
+    } catch(e) {}
+}
+
+async function downloadWorkspace(agentId) {
+    try {
+        const resp = await fetch(`/api/agents/${encodeURIComponent(agentId)}/workspace/download`, { method: 'POST' });
+        if (!resp.ok) { alert('下载失败'); return; }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${agentId}-workspace.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch(e) { alert('下载失败'); }
+}
+
+async function uploadAvatar(agentId, input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert('文件太大 (最大 2MB)'); return; }
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const resp = await fetch(`/api/agents/${encodeURIComponent(agentId)}/avatar`, { method: 'POST', body: formData });
+        if (resp.ok) { loadAgents(); } else { alert('上传失败'); }
+    } catch(e) { alert('上传失败'); }
+}
+
+loadAgents();
+</script>
+</body>
+</html>

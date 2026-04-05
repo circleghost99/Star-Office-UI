@@ -937,6 +937,67 @@
             word-wrap: break-word;
         }
 
+        /* === Tasks Panel === */
+        #tasks-panel {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            width: 260px;
+            max-height: 220px;
+            background: rgba(26,26,46,0.92);
+            border: 2px solid #e94560;
+            border-radius: 10px;
+            padding: 10px;
+            z-index: 1000050;
+            overflow-y: auto;
+            font-family: 'ArkPixel', monospace;
+            backdrop-filter: blur(6px);
+        }
+        #tasks-panel-title {
+            color: #ffd700;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+        .task-card {
+            background: #2c2f3a;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            border-left: 3px solid #555;
+        }
+        .task-card.task-status-working { border-left-color: #ffd700; }
+        .task-card.task-status-complete { border-left-color: #22c55e; }
+        .task-card.task-status-pending { border-left-color: #94a3b8; }
+        .task-title { font-size: 12px; color: #fff; margin-bottom: 4px; }
+        .task-meta { display: flex; gap: 6px; align-items: center; }
+        .task-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; }
+        .task-badge.task-status-working { background: #3a2a1a; color: #ffd700; }
+        .task-badge.task-status-complete { background: #1a3a2a; color: #22c55e; }
+        .task-badge.task-status-pending { background: #2a2a3a; color: #94a3b8; }
+        .task-agent { font-size: 10px; color: #94a3b8; }
+        .task-empty { color: #94a3b8; font-size: 12px; text-align: center; padding: 12px 0; }
+        /* === Nav Bar === */
+        #top-nav {
+            position: fixed;
+            top: 8px;
+            right: 10px;
+            display: flex;
+            gap: 6px;
+            z-index: 1000055;
+        }
+        #top-nav a {
+            color: #ffd700;
+            text-decoration: none;
+            padding: 5px 10px;
+            border: 1px solid rgba(255,215,0,0.4);
+            border-radius: 5px;
+            font-family: 'ArkPixel', monospace;
+            font-size: 11px;
+            background: rgba(26,26,46,0.85);
+            backdrop-filter: blur(4px);
+            transition: all 0.2s;
+        }
+        #top-nav a:hover { background: #ffd700; color: #1a1a2e; }
         /* === Phase 4: Task Flow Animation + Toast === */
         .task-flow-envelope {
             position: fixed;
@@ -1432,6 +1493,20 @@
             <div class="memo-decoration">─ ─ ─ ─ ─</div>
         </div>
         
+        <!-- 顶部导航 -->
+        <nav id="top-nav">
+            <a href="/security">安全</a>
+            <a href="/dashboard">成本</a>
+            <a href="/agents-config">Agent</a>
+            <a href="/skills-page">技能</a>
+        </nav>
+
+        <!-- 任务面板 -->
+        <div id="tasks-panel">
+            <div id="tasks-panel-title">任务列表</div>
+            <div id="tasks-panel-list"></div>
+        </div>
+
         <!-- 状态控制栏 -->
         <div id="control-bar">
             <div id="control-bar-title">Star 状态</div>
@@ -1555,11 +1630,12 @@
     <button id="pan-toggle" style="position:fixed; top:calc(env(safe-area-inset-top, 0px) + 12px); left:12px; z-index:999999; padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">
         移动视野
     </button>
-    <div id="lang-toggle-group" style="position:fixed; top:calc(env(safe-area-inset-top, 0px) + 52px); left:12px; z-index:1000002; display:flex; gap:2px; align-items:center;">
-        <button id="lang-btn-en" onclick="setUILanguage('en')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">EN</button>
-        <button id="lang-btn-jp" onclick="setUILanguage('ja')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">JP</button>
-        <button id="lang-btn-cn" onclick="setUILanguage('zh')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">CN</button>
-        <button id="lang-btn-tw" onclick="setUILanguage('zh-tw')" style="padding:8px 10px; font-family:ArkPixel,monospace; font-size:13px; cursor:pointer; border:2px solid #333; border-radius:5px; background:#333; color:#fff;">TW</button>
+    <!-- 語系設定已固定為繁體中文，隱藏語言切換按鈕 -->
+    <div id="lang-toggle-group" style="display:none !important;">
+        <button id="lang-btn-en">EN</button>
+        <button id="lang-btn-jp">JP</button>
+        <button id="lang-btn-cn">CN</button>
+        <button id="lang-btn-tw">TW</button>
     </div>
     <!-- Phase 3: Skills Overlay -->
     <div id="skills-overlay" class="star-overlay" onclick="if(event.target===this)closeOverlay('skills-overlay')">
@@ -1593,7 +1669,7 @@
     <script src="/static/vendor/phaser-3.80.1.min.js?v={{VERSION_TIMESTAMP}}"></script>
     <script>
         // 简易中英文切换
-        let uiLang = localStorage.getItem('uiLang') || 'en';
+        let uiLang = 'zh-tw'; // 固定繁體中文
 
         // === Phase 2: 房間系統 ===
         let currentRoom = 'lobby'; // 'lobby' = 共同辦公室, 其他 = agent ID
@@ -1828,9 +1904,25 @@
                 try {
                     const evt = JSON.parse(e.data);
                     const d = evt.data;
-                    // d.from, d.to, d.task
-                    showSSEToast('✉️ ' + (d.fromName||d.from) + ' → ' + (d.toName||d.to) + ': ' + (d.task||'任務傳遞'));
+                    const from = d.fromName || d.from_agent_id || d.from || '?';
+                    const to = d.toName || d.to_agent_id || d.to || '?';
+                    showSSEToast('✉️ ' + from + ' → ' + to + ': ' + (d.task || d.action || '任務傳遞'));
                     animateEnvelope(d);
+                    if (typeof window._onTaskSSEEvent === 'function') window._onTaskSSEEvent('task_flow', d);
+                } catch(err) {}
+            });
+
+            // Task created/updated → refresh task panel
+            sseSource.addEventListener('task_created', function(e) {
+                try {
+                    const evt = JSON.parse(e.data);
+                    if (typeof window._onTaskSSEEvent === 'function') window._onTaskSSEEvent('task_created', evt.data);
+                } catch(err) {}
+            });
+            sseSource.addEventListener('task_updated', function(e) {
+                try {
+                    const evt = JSON.parse(e.data);
+                    if (typeof window._onTaskSSEEvent === 'function') window._onTaskSSEEvent('task_updated', evt.data);
                 } catch(err) {}
             });
         }
@@ -5609,5 +5701,6 @@ function toggleBrokerPanel() {
         // 启动游戏
         initGame();
     </script>
+    <script src="/static/tasks-panel.js?v={{VERSION_TIMESTAMP}}"></script>
 </body>
 </html>

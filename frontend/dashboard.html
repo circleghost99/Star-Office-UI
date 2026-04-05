@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成本面板 - Star Office</title>
+    <style>
+        @font-face {
+            font-family: 'ArkPixel';
+            src: url('/static/fonts/ark-pixel-12px-proportional-zh_cn.ttf.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            font-family: 'ArkPixel', 'Courier New', monospace;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .nav { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .nav a {
+            color: #ffd700;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 2px solid #ffd700;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav a:hover, .nav a.active { background: #ffd700; color: #1a1a2e; }
+        h1 { color: #ffd700; font-size: 22px; margin-bottom: 20px; }
+        h2 { color: #e94560; font-size: 18px; margin: 20px 0 12px; }
+        .container {
+            background: #2c2f3a;
+            border: 3px solid #e94560;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+        }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .summary-card {
+            background: #3a3f4f;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .summary-value { font-size: 32px; color: #ffd700; }
+        .summary-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #3a3f4f; font-size: 13px; }
+        th { color: #ffd700; font-size: 12px; text-transform: uppercase; }
+        .bar-container { height: 16px; background: #3a3f4f; border-radius: 4px; overflow: hidden; min-width: 60px; }
+        .bar-fill { height: 100%; background: linear-gradient(90deg, #e94560, #ffd700); border-radius: 4px; transition: width 0.5s; }
+        .engagement-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+        .engagement-dots { display: flex; gap: 3px; }
+        .dot { width: 10px; height: 10px; border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/security">安全监控</a>
+        <a href="/dashboard" class="active">成本面板</a>
+        <a href="/agents-config">Agent 设定</a>
+        <a href="/skills-page">技能管理</a>
+    </div>
+
+    <h1>成本与活跃度面板</h1>
+
+    <!-- Cost Dashboard -->
+    <div class="container">
+        <h2>本月 Token 用量</h2>
+        <div class="summary-grid" id="cost-summary"></div>
+        <table>
+            <thead><tr><th>Agent</th><th>Input</th><th>Output</th><th>Total</th><th>费用 (USD)</th><th></th></tr></thead>
+            <tbody id="cost-tbody"></tbody>
+        </table>
+    </div>
+
+    <!-- Engagement Dashboard -->
+    <div class="container">
+        <h2>7 日活跃度</h2>
+        <table>
+            <thead><tr><th>Agent</th><th>日期</th><th>对话</th><th>字数</th><th>Token</th><th>错误</th><th>完成任务</th></tr></thead>
+            <tbody id="engagement-tbody"></tbody>
+        </table>
+    </div>
+
+<script>
+async function loadCostDashboard() {
+    try {
+        const resp = await fetch('/api/cost-dashboard');
+        const data = await resp.json();
+
+        document.getElementById('cost-summary').innerHTML = `
+            <div class="summary-card"><div class="summary-value">${formatNum(data.grand_total_tokens)}</div><div class="summary-label">Total Tokens</div></div>
+            <div class="summary-card"><div class="summary-value">$${data.grand_total_cost.toFixed(2)}</div><div class="summary-label">Total Cost</div></div>
+            <div class="summary-card"><div class="summary-value">${data.agents.length}</div><div class="summary-label">Active Agents</div></div>
+        `;
+
+        const maxTokens = Math.max(...data.agents.map(a => a.total_tokens || 1), 1);
+        document.getElementById('cost-tbody').innerHTML = data.agents.length ? data.agents.map(a => `
+            <tr>
+                <td>${a.agent_id}</td>
+                <td>${formatNum(a.total_input)}</td>
+                <td>${formatNum(a.total_output)}</td>
+                <td>${formatNum(a.total_tokens)}</td>
+                <td>$${(a.total_cost || 0).toFixed(4)}</td>
+                <td><div class="bar-container"><div class="bar-fill" style="width:${((a.total_tokens||0)/maxTokens*100).toFixed(1)}%"></div></div></td>
+            </tr>
+        `).join('') : '<tr><td colspan="6" style="color:#94a3b8">暂无数据</td></tr>';
+    } catch(e) {}
+}
+
+async function loadEngagement() {
+    try {
+        const resp = await fetch('/api/engagement-dashboard');
+        const data = await resp.json();
+        const tbody = document.getElementById('engagement-tbody');
+        if (!data.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#94a3b8">暂无数据</td></tr>'; return; }
+        tbody.innerHTML = data.map(r => `
+            <tr>
+                <td>${r.agent_id}</td>
+                <td>${r.date}</td>
+                <td>${r.conversations}</td>
+                <td>${formatNum(r.word_count)}</td>
+                <td>${formatNum(r.token_usage)}</td>
+                <td style="color:${r.errors ? '#ef4444' : '#94a3b8'}">${r.errors}</td>
+                <td>${r.task_completions}</td>
+            </tr>
+        `).join('');
+    } catch(e) {}
+}
+
+function formatNum(n) {
+    if (!n) return '0';
+    if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+    return n.toString();
+}
+
+loadCostDashboard();
+loadEngagement();
+</script>
+</body>
+</html>

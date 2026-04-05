@@ -89,10 +89,10 @@ def build_prompt(agent_id, display_name, style=""):
     return (
         f"pixel art character, 32x32 sprite, {color} {animal} character, "
         f"{accessory}, {style_str} style, "
-        f"single character centered on transparent background, "
+        f"single character centered, solid black background, "
         f"front-facing idle pose, cute chibi proportions, "
         f"clean crisp pixel outlines, limited retro color palette, "
-        f"game sprite asset, no text, no watermark"
+        f"game sprite asset, no text, no watermark, no gradient"
     )
 
 
@@ -106,7 +106,7 @@ def generate_single_image(prompt, output_path):
         "uv", "run", str(SKILL_SCRIPT),
         "--prompt", prompt,
         "--filename", str(output_path),
-        "--resolution", "1K",
+        "--resolution", "2K",
         "--aspect-ratio", "1:1",
     ]
 
@@ -142,6 +142,43 @@ def find_output(base_path):
     return None
 
 
+def clean_background(img):
+    """移除背景：將接近黑色/白色/灰色棋盤的像素設為全透明（純 Pillow，不需 numpy）"""
+    from PIL import Image
+
+    img = img.convert('RGBA')
+    pixels = img.load()
+    w, h = img.size
+
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = pixels[x, y]
+            # 近黑色背景
+            if r < 30 and g < 30 and b < 30:
+                pixels[x, y] = (r, g, b, 0)
+            # 近白色背景
+            elif r > 230 and g > 230 and b > 230:
+                pixels[x, y] = (r, g, b, 0)
+            # 灰色棋盤格
+            elif abs(r - g) < 10 and abs(g - b) < 10 and (r > 180 or r < 50):
+                pixels[x, y] = (r, g, b, 0)
+
+    return img
+
+
+def crop_to_content(img, padding=4):
+    """自動裁切到內容範圍（去除透明邊框）"""
+    bbox = img.getbbox()
+    if bbox:
+        # 加一點 padding
+        x0 = max(0, bbox[0] - padding)
+        y0 = max(0, bbox[1] - padding)
+        x1 = min(img.width, bbox[2] + padding)
+        y1 = min(img.height, bbox[3] + padding)
+        img = img.crop((x0, y0, x1, y1))
+    return img
+
+
 def make_spritesheet(source_image_path, output_path, format="WEBP"):
     """將單一角色圖裁切/縮放成 128×64 精靈表（32×32 × 8 幀）
     用 Pillow 做 4 個走動姿勢：idle, lean-left, idle, lean-right（模擬走動）
@@ -153,6 +190,10 @@ def make_spritesheet(source_image_path, output_path, format="WEBP"):
         sys.exit(1)
 
     img = Image.open(source_image_path).convert("RGBA")
+
+    # 去背 + 裁切到角色範圍
+    img = clean_background(img)
+    img = crop_to_content(img)
 
     # 縮放到 32×32
     base_frame = img.resize((FRAME_SIZE, FRAME_SIZE), Image.LANCZOS)
@@ -243,12 +284,16 @@ def make_animated_spritesheet(base_image_path, poses, output_path, format="WEBP"
         sys.exit(1)
 
     base = Image.open(base_image_path).convert("RGBA")
+    base = clean_background(base)
+    base = crop_to_content(base)
     base_frame = base.resize((FRAME_SIZE, FRAME_SIZE), Image.LANCZOS)
 
     # 載入各姿勢，失敗則用偏移替代
     def load_pose(name, dx, dy):
         if name in poses and poses[name].exists():
             img = Image.open(poses[name]).convert("RGBA")
+            img = clean_background(img)
+            img = crop_to_content(img)
             return img.resize((FRAME_SIZE, FRAME_SIZE), Image.LANCZOS)
         else:
             f = Image.new("RGBA", (FRAME_SIZE, FRAME_SIZE), (0, 0, 0, 0))

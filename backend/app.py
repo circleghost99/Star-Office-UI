@@ -86,6 +86,7 @@ STATE_TO_AREA_MAP = {
 
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="/static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("STAR_OFFICE_SECRET") or "star-office-dev-secret-change-me"
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2MB upload limit
 
 # Session hardening
 app.config.update(
@@ -94,6 +95,22 @@ app.config.update(
     SESSION_COOKIE_SECURE=is_production_mode(),
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
+
+# --- SQLite database initialization ---
+from database import init_db, close_db
+init_db()
+
+@app.teardown_appcontext
+def _teardown_db(_exc):
+    close_db()
+
+# --- Register feature blueprints ---
+from blueprints import register_blueprints
+register_blueprints(app)
+
+# --- Prompt Guard middleware hook ---
+from blueprints.prompt_guard import init_prompt_guard_hook
+init_prompt_guard_hook(app)
 
 # Guard join-agent critical section to enforce per-key concurrency under parallel requests
 join_lock = threading.Lock()
@@ -328,6 +345,39 @@ def invite_page():
     resp = make_response(html)
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     return resp
+
+
+# --- New feature pages (LazyOffice ports) ---
+
+def _serve_frontend_html(filename):
+    path = os.path.join(FRONTEND_DIR, filename)
+    if not os.path.exists(path):
+        return "Page not found", 404
+    with open(path, "r", encoding="utf-8") as f:
+        html = f.read()
+    resp = make_response(html)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    return resp
+
+
+@app.route("/security", methods=["GET"])
+def security_page():
+    return _serve_frontend_html("security.html")
+
+
+@app.route("/dashboard", methods=["GET"])
+def dashboard_page():
+    return _serve_frontend_html("dashboard.html")
+
+
+@app.route("/agents-config", methods=["GET"])
+def agents_config_page():
+    return _serve_frontend_html("agents-config.html")
+
+
+@app.route("/skills-page", methods=["GET"])
+def skills_page():
+    return _serve_frontend_html("skills.html")
 
 
 DEFAULT_AGENTS = [
@@ -2285,6 +2335,13 @@ def api_emit_event():
 
 
 if __name__ == "__main__":
+    # Start background port scanner (only when running as server)
+    try:
+        from services.port_scanner import start_scanner
+        start_scanner()
+    except Exception:
+        pass
+
     raw_port = os.environ.get("STAR_BACKEND_PORT", "19000")
     try:
         backend_port = int(raw_port)

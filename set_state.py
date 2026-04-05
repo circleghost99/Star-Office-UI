@@ -31,7 +31,19 @@ VALID_STATES = [
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            # If the file contains a list, find the main state or the first element
+            if isinstance(data, list):
+                if len(data) > 0:
+                    return data[0]
+                else:
+                    return {
+                        "state": "idle",
+                        "detail": "待命中...",
+                        "progress": 0,
+                        "updated_at": datetime.now().isoformat()
+                    }
+            return data
     return {
         "state": "idle",
         "detail": "待命中...",
@@ -40,8 +52,26 @@ def load_state():
     }
 
 def save_state(state):
+    # If the file exists and is a list, update the first element or append
+    current_data = None
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                current_data = json.load(f)
+        except Exception:
+            pass
+
+    if isinstance(current_data, list):
+        if len(current_data) > 0:
+            current_data[0].update(state)
+        else:
+            current_data.append(state)
+        output_data = current_data
+    else:
+        output_data = state
+
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

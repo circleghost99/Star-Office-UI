@@ -40,3 +40,8 @@ join-keys.json
 
 # Local scanner state
 local-scanner-state.json
+
+# SQLite database
+star-office.db
+star-office.db-shm
+star-office.db-wal

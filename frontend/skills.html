@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>技能管理 - Star Office</title>
+    <style>
+        @font-face {
+            font-family: 'ArkPixel';
+            src: url('/static/fonts/ark-pixel-12px-proportional-zh_cn.ttf.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            font-family: 'ArkPixel', 'Courier New', monospace;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .nav { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .nav a {
+            color: #ffd700;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 2px solid #ffd700;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav a:hover, .nav a.active { background: #ffd700; color: #1a1a2e; }
+        h1 { color: #ffd700; font-size: 22px; margin-bottom: 20px; }
+        h2 { color: #e94560; font-size: 18px; margin: 20px 0 12px; }
+        .container {
+            background: #2c2f3a;
+            border: 3px solid #e94560;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+        }
+        .btn {
+            padding: 10px 20px;
+            font-family: 'ArkPixel', monospace;
+            font-size: 14px;
+            border: 2px solid #e94560;
+            border-radius: 6px;
+            background: #e94560;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: #ff6b81; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .search-box {
+            width: 100%;
+            max-width: 400px;
+            padding: 10px 12px;
+            background: #3a3f4f;
+            border: 2px solid #555;
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'ArkPixel', monospace;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        .skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .skill-card {
+            background: #3a3f4f;
+            border-radius: 8px;
+            padding: 16px;
+            transition: border-color 0.2s;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+        .skill-card:hover { border-color: #e94560; }
+        .skill-name { font-size: 15px; color: #ffd700; margin-bottom: 6px; }
+        .skill-desc { font-size: 12px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4; }
+        .skill-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+        .skill-tag {
+            padding: 2px 8px;
+            background: #2c2f3a;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #ddd;
+        }
+        .skill-detail {
+            display: none;
+            margin-top: 20px;
+            padding: 16px;
+            background: #3a3f4f;
+            border-radius: 8px;
+        }
+        .skill-detail.active { display: block; }
+        .skill-detail pre {
+            background: #2c2f3a;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/security">安全监控</a>
+        <a href="/dashboard">成本面板</a>
+        <a href="/agents-config">Agent 设定</a>
+        <a href="/skills-page" class="active">技能管理</a>
+    </div>
+
+    <h1>技能管理</h1>
+
+    <div class="container">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px">
+            <input class="search-box" type="text" id="search" placeholder="搜索技能..." oninput="filterSkills()">
+            <button class="btn" onclick="rescanSkills()">重新扫描</button>
+        </div>
+        <div class="skill-grid" id="skills-grid">
+            <div style="color:#94a3b8">加载中...</div>
+        </div>
+    </div>
+
+    <div class="container skill-detail" id="skill-detail">
+        <h2 id="detail-name"></h2>
+        <pre id="detail-content"></pre>
+    </div>
+
+<script>
+let _allSkills = [];
+
+function escapeHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function loadSkills() {
+    try {
+        const resp = await fetch('/api/skills');
+        _allSkills = await resp.json();
+        renderSkills(_allSkills);
+    } catch(e) {
+        document.getElementById('skills-grid').innerHTML = '<div style="color:#ef4444">加载失败</div>';
+    }
+}
+
+function renderSkills(skills) {
+    const grid = document.getElementById('skills-grid');
+    if (!skills.length) { grid.innerHTML = '<div style="color:#94a3b8">未发现任何技能</div>'; return; }
+
+    grid.innerHTML = skills.map(s => {
+        const name = s.name || s.display_name || 'unnamed';
+        const desc = s.description || '';
+        const agents = (s.agents || []).join(', ');
+        return `
+        <div class="skill-card" onclick="showDetail('${escapeHtml(name)}')">
+            <div class="skill-name">${escapeHtml(name)}</div>
+            <div class="skill-desc">${escapeHtml(desc).slice(0, 120)}</div>
+            <div class="skill-meta">
+                ${s.source ? `<span class="skill-tag">${escapeHtml(s.source)}</span>` : ''}
+                ${agents ? `<span class="skill-tag">${escapeHtml(agents)}</span>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function filterSkills() {
+    const q = document.getElementById('search').value.toLowerCase();
+    if (!q) { renderSkills(_allSkills); return; }
+    renderSkills(_allSkills.filter(s =>
+        (s.name || '').toLowerCase().includes(q) ||
+        (s.description || '').toLowerCase().includes(q)
+    ));
+}
+
+async function showDetail(name) {
+    const panel = document.getElementById('skill-detail');
+    document.getElementById('detail-name').textContent = name;
+    document.getElementById('detail-content').textContent = '加载中...';
+    panel.classList.add('active');
+    try {
+        const resp = await fetch(`/api/skills/${encodeURIComponent(name)}`);
+        const data = await resp.json();
+        document.getElementById('detail-content').textContent = data.content || data.description || '(无详细内容)';
+    } catch(e) {
+        document.getElementById('detail-content').textContent = '加载失败';
+    }
+}
+
+async function rescanSkills() {
+    loadSkills();
+}
+
+loadSkills();
+</script>
+</body>
+</html>

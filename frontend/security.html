@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安全监控 - Star Office</title>
+    <style>
+        @font-face {
+            font-family: 'ArkPixel';
+            src: url('/static/fonts/ark-pixel-12px-proportional-zh_cn.ttf.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            font-family: 'ArkPixel', 'Courier New', monospace;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .nav { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .nav a {
+            color: #ffd700;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 2px solid #ffd700;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav a:hover, .nav a.active { background: #ffd700; color: #1a1a2e; }
+        h1 { color: #ffd700; font-size: 22px; margin-bottom: 20px; }
+        h2 { color: #e94560; font-size: 18px; margin: 20px 0 12px; }
+        .container {
+            background: #2c2f3a;
+            border: 3px solid #e94560;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+        }
+        .btn {
+            padding: 10px 20px;
+            font-family: 'ArkPixel', monospace;
+            font-size: 14px;
+            border: 2px solid #e94560;
+            border-radius: 6px;
+            background: #e94560;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: #ff6b81; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #3a3f4f; font-size: 13px; }
+        th { color: #ffd700; font-size: 12px; text-transform: uppercase; }
+        .risk-high { color: #ef4444; font-weight: bold; }
+        .risk-medium { color: #f59e0b; }
+        .risk-low { color: #22c55e; }
+        .risk-safe { color: #94a3b8; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+        .stat-card {
+            background: #3a3f4f;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-value { font-size: 28px; color: #ffd700; }
+        .stat-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        .prompt-test { margin-top: 16px; }
+        .prompt-test textarea {
+            width: 100%;
+            min-height: 80px;
+            background: #3a3f4f;
+            border: 2px solid #555;
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'ArkPixel', monospace;
+            font-size: 13px;
+            padding: 10px;
+            resize: vertical;
+            margin-bottom: 8px;
+        }
+        .result-box {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+        .result-safe { background: #1a3a2a; border: 1px solid #22c55e; }
+        .result-blocked { background: #3a1a1a; border: 1px solid #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/security" class="active">安全监控</a>
+        <a href="/dashboard">成本面板</a>
+        <a href="/agents-config">Agent 设定</a>
+        <a href="/skills-page">技能管理</a>
+    </div>
+
+    <h1>安全监控</h1>
+
+    <!-- Port Scan -->
+    <div class="container">
+        <h2>Port 扫描</h2>
+        <button class="btn" id="scan-btn" onclick="triggerScan()">立即扫描</button>
+        <table id="port-table">
+            <thead><tr><th>Port</th><th>服务</th><th>状态</th><th>风险</th></tr></thead>
+            <tbody id="port-tbody"></tbody>
+        </table>
+    </div>
+
+    <!-- Prompt Guard -->
+    <div class="container">
+        <h2>Prompt Guard</h2>
+        <div class="stat-grid" id="pg-stats"></div>
+        <div class="prompt-test">
+            <textarea id="test-prompt" placeholder="输入文本测试 Prompt 安全性..."></textarea>
+            <button class="btn" onclick="testPrompt()">测试</button>
+            <div id="test-result"></div>
+        </div>
+    </div>
+
+    <!-- Audit Log -->
+    <div class="container">
+        <h2>审查记录</h2>
+        <table>
+            <thead><tr><th>时间</th><th>路径</th><th>风险</th><th>结果</th></tr></thead>
+            <tbody id="audit-tbody"></tbody>
+        </table>
+    </div>
+
+<script>
+async function loadPortScan() {
+    try {
+        const resp = await fetch('/api/security/port-scan/latest');
+        const data = await resp.json();
+        const tbody = document.getElementById('port-tbody');
+        if (!data.length) { tbody.innerHTML = '<tr><td colspan="4" style="color:#94a3b8">尚无扫描结果</td></tr>'; return; }
+        tbody.innerHTML = data.map(r => `
+            <tr>
+                <td>${r.port}</td>
+                <td>${r.service}</td>
+                <td>${r.status}</td>
+                <td class="risk-${r.risk_level}">${r.risk_level.toUpperCase()}</td>
+            </tr>
+        `).join('');
+    } catch(e) {}
+}
+
+async function triggerScan() {
+    const btn = document.getElementById('scan-btn');
+    btn.disabled = true;
+    btn.textContent = '扫描中...';
+    try {
+        await fetch('/api/security/port-scan/trigger', { method: 'POST' });
+        setTimeout(() => { loadPortScan(); btn.disabled = false; btn.textContent = '立即扫描'; }, 5000);
+    } catch(e) { btn.disabled = false; btn.textContent = '立即扫描'; }
+}
+
+async function loadPGStats() {
+    try {
+        const resp = await fetch('/api/prompt-guard/stats');
+        const data = await resp.json();
+        document.getElementById('pg-stats').innerHTML = `
+            <div class="stat-card"><div class="stat-value">${data.total}</div><div class="stat-label">总审查</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:#22c55e">${data.safe}</div><div class="stat-label">安全</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:#ef4444">${data.blocked}</div><div class="stat-label">已拦截</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:#f59e0b">${data.api_unavailable}</div><div class="stat-label">API 不可用</div></div>
+        `;
+    } catch(e) {}
+}
+
+async function testPrompt() {
+    const text = document.getElementById('test-prompt').value.trim();
+    if (!text) return;
+    const div = document.getElementById('test-result');
+    div.innerHTML = '<div class="result-box" style="background:#2a2a3a">检测中...</div>';
+    try {
+        const resp = await fetch('/api/prompt-guard/audit-log?limit=0', { method: 'GET' });
+        // Use a proxy test: send a POST to a test endpoint
+        const r = await fetch('/api/departments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: '__test__' + Date.now(), label: text }),
+        });
+        if (r.status === 400) {
+            const d = await r.json();
+            if (d.code === 'PROMPT_BLOCKED') {
+                div.innerHTML = `<div class="result-box result-blocked">BLOCKED — ${d.risk_level} (${d.msg})</div>`;
+                return;
+            }
+        }
+        div.innerHTML = '<div class="result-box result-safe">SAFE — 未检测到注入风险</div>';
+    } catch(e) {
+        div.innerHTML = '<div class="result-box" style="background:#2a2a3a">测试失败</div>';
+    }
+}
+
+async function loadAuditLog() {
+    try {
+        const resp = await fetch('/api/prompt-guard/audit-log?limit=20');
+        const data = await resp.json();
+        const tbody = document.getElementById('audit-tbody');
+        if (!data.length) { tbody.innerHTML = '<tr><td colspan="4" style="color:#94a3b8">暂无记录</td></tr>'; return; }
+        tbody.innerHTML = data.map(r => `
+            <tr>
+                <td>${(r.evaluated_at || '').replace('T', ' ').slice(0,19)}</td>
+                <td>${r.request_path || ''}</td>
+                <td class="risk-${r.risk_level}">${r.risk_level}</td>
+                <td>${r.blocked ? '<span style="color:#ef4444">拦截</span>' : '<span style="color:#22c55e">放行</span>'}</td>
+            </tr>
+        `).join('');
+    } catch(e) {}
+}
+
+loadPortScan();
+loadPGStats();
+loadAuditLog();
+</script>
+</body>
+</html>

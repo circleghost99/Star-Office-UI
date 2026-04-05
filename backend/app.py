@@ -961,6 +961,35 @@ def get_agents():
     save_agents_state(cleaned_agents)
     save_join_keys(keys_data)
 
+    # Merge locally discovered OpenClaw agents into the list
+    # so they appear automatically in the Phaser office
+    try:
+        discovered = discover_all_agents()
+        existing_ids = {a.get("agentId") or a.get("openclawId") for a in cleaned_agents}
+        existing_ids |= {a.get("name", "").lower() for a in cleaned_agents}
+        for d in discovered:
+            agent_id = d.get("id", "")
+            if agent_id in existing_ids or agent_id.lower() in existing_ids:
+                continue
+            # Convert discover format → agents format
+            state = d.get("state", "idle")
+            if state not in VALID_AGENT_STATES:
+                state = "idle"
+            cleaned_agents.append({
+                "agentId": f"local_{agent_id}",
+                "name": d.get("displayName") or agent_id,
+                "isMain": d.get("isMain", False),
+                "state": state,
+                "detail": d.get("detail", ""),
+                "updated_at": d.get("lastActive") or now.isoformat(),
+                "area": STATE_TO_AREA_MAP.get(state, "breakroom"),
+                "source": "local-openclaw",
+                "authStatus": "approved",
+                "openclawId": agent_id,
+            })
+    except Exception:
+        pass
+
     return jsonify(cleaned_agents)
 
 
